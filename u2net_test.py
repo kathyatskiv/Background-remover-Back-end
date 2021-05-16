@@ -1,4 +1,5 @@
 import os
+import sys
 from skimage import io, transform
 import torch
 import torchvision
@@ -12,6 +13,7 @@ from torchvision import transforms#, utils
 import numpy as np
 from PIL import Image
 import glob
+import cv2 
 
 from data_loader import RescaleT
 from data_loader import ToTensor
@@ -20,6 +22,9 @@ from data_loader import SalObjDataset
 
 from model import U2NET # full size version 173.6 MB
 from model import U2NETP # small version u2net 4.7 MB
+
+from apply_mask import mask
+# from firebase_connection import del_all, download
 
 # normalize the predicted SOD probability map
 def normPRED(d):
@@ -30,7 +35,7 @@ def normPRED(d):
 
     return dn
 
-def save_output(image_name,pred,d_dir):
+def save_output(image_name,pred,d_dir,data_test):
 
     predict = pred
     predict = predict.squeeze()
@@ -43,26 +48,26 @@ def save_output(image_name,pred,d_dir):
 
     pb_np = np.array(imo)
 
-    aaa = img_name.split(".")
-    bbb = aaa[0:-1]
-    imidx = bbb[0]
-    for i in range(1,len(bbb)):
-        imidx = imidx + "." + bbb[i]
+    nms = img_name.split(".")
+    path = nms[0:-1]
+    imidx = path[0]
+    for i in range(1,len(path)):
+        imidx = imidx + "." + path[i]
 
     imo.save(d_dir+imidx+'.png')
+    mask(image_name)
 
-def main():
+
+def main(name):
 
     # --------- 1. get image path and name ---------
     model_name='u2net'#u2netp
 
-
-
-    image_dir = os.path.join(os.getcwd(), 'test_data', 'test_images')
+    image_dir = os.path.join(os.getcwd(), 'uploads')
     prediction_dir = os.path.join(os.getcwd(), 'test_data', model_name + '_results' + os.sep)
     model_dir = os.path.join(os.getcwd(), 'saved_models', model_name, model_name + '.pth')
 
-    img_name_list = glob.glob(image_dir + os.sep + '*')
+    img_name_list = glob.glob(image_dir + os.sep + name)
     print(img_name_list)
 
     # --------- 2. dataloader ---------
@@ -84,9 +89,12 @@ def main():
     elif(model_name=='u2netp'):
         print("...load U2NEP---4.7 MB")
         net = U2NETP(3,1)
-    net.load_state_dict(torch.load(model_dir))
+
     if torch.cuda.is_available():
+        net.load_state_dict(torch.load(model_dir))
         net.cuda()
+    else:
+        net.load_state_dict(torch.load(model_dir, map_location='cpu'))
     net.eval()
 
     # --------- 4. inference for each image ---------
@@ -109,11 +117,14 @@ def main():
         pred = normPRED(pred)
 
         # save results to test_results folder
+
         if not os.path.exists(prediction_dir):
             os.makedirs(prediction_dir, exist_ok=True)
-        save_output(img_name_list[i_test],pred,prediction_dir)
+        save_output(img_name_list[i_test],pred,prediction_dir,data_test)
 
         del d1,d2,d3,d4,d5,d6,d7
 
 if __name__ == "__main__":
-    main()
+    for param in sys.argv:
+        print (param)
+    main(param)
